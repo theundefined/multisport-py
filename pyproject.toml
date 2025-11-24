@@ -7,7 +7,7 @@ name = "multisport-py"
 version = "0.0.1"
 description = "Python library for MultiSport API"
 authors = [
-    { name = "TheUndefined", email = "theundefined@example.com" },
+    { name = "TheUndefined", email = "undefine@aramin.net" },
 ]
 license = "MIT"
 requires-python = ">=3.12"

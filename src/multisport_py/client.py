@@ -122,7 +122,7 @@ class MultisportClient:
             auth_code = fragment_params.get("code", [""])[0]
             if auth_code:
                 logger.info(f"Successfully obtained authorization code (truncated): {auth_code[:8]}...")
-                return auth_code
+                return cast(str, auth_code)
 
         logger.error("Failed to extract authorization code from redirect fragment: " f"{redirect_location}")
         raise ValueError("Authentication failed: Could not obtain authorization code.")
@@ -180,7 +180,7 @@ class MultisportClient:
         headers = {"Authorization": f"Bearer {self.access_token}"}
         response = await self.http_client.get(f"{self.AUTH_BASE_URL}protocol/openid-connect/userinfo", headers=headers)
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     async def get_authorized_users(self) -> Dict[str, Any]:
         """Fetch authorized users from the BAM API; this should contain product IDs."""
@@ -193,7 +193,7 @@ class MultisportClient:
         }  # Added Accept-Language from curl
         response = await self.http_client.get(f"{self.API_BASE_URL}bam/core/v1/authorized/users", headers=headers)
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     async def get_card_limits(self, product_id: str) -> Dict[str, Any]:
         """Fetch card limits for a given product ID."""
@@ -209,7 +209,7 @@ class MultisportClient:
             headers=headers,
         )
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     async def get_card_history(
         self,
@@ -242,7 +242,7 @@ class MultisportClient:
             params=params,
         )
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     async def get_relations(self) -> Dict[str, Any]:
         """Fetch related cards and users."""
@@ -257,7 +257,7 @@ class MultisportClient:
             f"{self.API_BASE_URL}bam/relations/v1/authorized/relations", headers=headers
         )
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     async def close(self):
         """Close the HTTP client session."""
