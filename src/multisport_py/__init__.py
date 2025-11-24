@@ -1,1 +1,1 @@
-from .client import MultisportClient
+from .client import MultisportClient as MultisportClient
