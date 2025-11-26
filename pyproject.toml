@@ -23,6 +23,17 @@ dependencies = [
 [project.urls]
 "Homepage" = "https://github.com/TheUndefined/multisport-py"
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "black",
+    "mypy",
+    "python-dotenv",
+    "pytest-asyncio",
+    "pytest-httpx"
+]
+
 [tool.black]
 line-length = 120
 
@@ -38,3 +49,6 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 pythonpath = "src"
+
+[tool.hatch.version]
+path = "src/multisport_py/__init__.py"
