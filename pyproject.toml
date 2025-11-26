@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multisport-py"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Python library for MultiSport API"
 authors = [
     { name = "TheUndefined", email = "undefine@aramin.net" },
