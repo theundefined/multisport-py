@@ -31,7 +31,8 @@ dev = [
     "mypy",
     "python-dotenv",
     "pytest-asyncio",
-    "pytest-httpx"
+    "pytest-httpx",
+    "pytest-cov"
 ]
 
 [tool.black]
