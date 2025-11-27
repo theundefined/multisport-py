@@ -4,6 +4,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from multisport_py.client import MultisportClient
+from multisport_py.exceptions import AuthenticationError
 
 # Dummy login form HTML containing the action URL
 LOGIN_FORM_HTML = """
@@ -79,7 +80,7 @@ async def test_login_fails_on_bad_credentials(httpx_mock: HTTPXMock):
     )
 
     client = MultisportClient(username="wronguser", password="wrongpassword")
-    with pytest.raises(ValueError, match="Authentication failed: Unexpected status code 401"):
+    with pytest.raises(AuthenticationError, match="Authentication failed: Unexpected status code 401"):
         await client.login()
 
     await client.close()

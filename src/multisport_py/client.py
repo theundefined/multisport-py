@@ -8,6 +8,8 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from .exceptions import AuthenticationError, MultisportError
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,7 +74,7 @@ class MultisportClient:
         match = re.search(r'action="([^"]*login-actions/authenticate[^"]*)"', login_form_html)
         if not match:
             logger.error("Could not find login action URL in the HTML response.")
-            raise ValueError("Could not find login form action URL.")
+            raise AuthenticationError("Could not find login form action URL.")
 
         login_action_url = match.group(1).replace("&amp;", "&")
         logger.info(f"Extracted login action URL: {login_action_url}")
@@ -103,7 +105,7 @@ class MultisportClient:
                 "Login POST failed. Expected status 302, got "
                 f"{login_response.status_code}. Response: {login_response.text[:200]}"
             )
-            raise ValueError(f"Authentication failed: Unexpected status code {login_response.status_code}.")
+            raise AuthenticationError(f"Authentication failed: Unexpected status code {login_response.status_code}.")
 
         redirect_location = login_response.headers.get("Location")
         if not redirect_location:
@@ -112,7 +114,7 @@ class MultisportClient:
                 f"Response status: {login_response.status_code}, "
                 f"text: {login_response.text[:200]}"
             )
-            raise ValueError("Authentication failed: No redirect after login POST.")
+            raise AuthenticationError("Authentication failed: No redirect after login POST.")
 
         logger.info(f"Redirect location after login: {redirect_location}")
 
@@ -125,7 +127,7 @@ class MultisportClient:
                 return cast(str, auth_code)
 
         logger.error("Failed to extract authorization code from redirect fragment: " f"{redirect_location}")
-        raise ValueError("Authentication failed: Could not obtain authorization code.")
+        raise AuthenticationError("Authentication failed: Could not obtain authorization code.")
 
     async def _exchange_code_for_tokens(self, auth_code: str) -> None:
         """Exchanges the authorization code for access and refresh tokens."""
@@ -157,7 +159,7 @@ class MultisportClient:
 
         if not self.access_token:
             logger.error(f"Access token not found in response: {tokens}")
-            raise ValueError("Authentication failed: Access token missing.")
+            raise AuthenticationError("Authentication failed: Access token missing.")
 
         logger.info("Successfully obtained access and refresh tokens.")
 
@@ -168,7 +170,9 @@ class MultisportClient:
             auth_code = await self._authenticate_step1()
             await self._exchange_code_for_tokens(auth_code)
             logger.info("MultiSport login successful.")
-        except Exception:
+        except httpx.RequestError as exc:
+            raise MultisportError(f"An error occurred while requesting MultiSport API: {exc}") from exc
+        except AuthenticationError:
             logger.exception("MultiSport login failed:")
             raise
 
