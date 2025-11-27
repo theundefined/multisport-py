@@ -51,6 +51,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write # Needed to push a commit and tag
+      id-token: write # Needed for OIDC authentication with PyPI
 
     steps:
       - name: Checkout repository
