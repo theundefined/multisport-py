@@ -3,7 +3,7 @@ import hashlib
 import logging
 import os
 import re
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -220,7 +220,7 @@ class MultisportClient:
         product_id: str,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> List[Dict[str, Any]]:
         """
         Fetch card entry history for a given product ID.
 
@@ -246,7 +246,7 @@ class MultisportClient:
             params=params,
         )
         response.raise_for_status()
-        return cast(Dict[str, Any], response.json())
+        return cast(List[Dict[str, Any]], response.json())
 
     async def get_relations(self) -> Dict[str, Any]:
         """Fetch related cards and users."""
