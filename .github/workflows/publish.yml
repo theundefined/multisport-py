@@ -3,11 +3,12 @@ name: Test, Build and Publish
 on:
   push:
     branches:
-      - main
+      - 'main'
+    tags:
+      - 'v*'
   pull_request:
     branches:
-      - main
-  workflow_dispatch:
+      - 'main'
 
 jobs:
   test:
@@ -48,7 +49,7 @@ jobs:
     name: Build, Publish and Tag
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write # Needed to push a commit and tag
       id-token: write # Needed for OIDC authentication with PyPI
@@ -68,12 +69,7 @@ jobs:
       - name: Install Hatch
         run: python -m pip install --upgrade hatch
 
-      - name: Set version
-        id: set_version
-        run: |
-          VERSION="0.0.$(date -u +'%Y%m%d.%H%M%S')"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          hatch version ${VERSION}
+
       
       - name: Build package
         run: hatch build
@@ -82,12 +78,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
 
-      - name: Commit, Tag and Push
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add src/multisport_py/__init__.py
-          git commit -m "chore: Bump version to ${{ steps.set_version.outputs.VERSION }} [skip ci]"
-          git tag "v${{ steps.set_version.outputs.VERSION }}"
-          git push
-          git push --tags
+
