@@ -89,7 +89,7 @@ REPO_OWNER=$(echo "$REPO_URL" | sed -E 's/.*github.com[:/]([^/]+)\/.*/\1/')
 REPO_NAME=$(echo "$REPO_URL" | sed -E 's/.*github.com[:/][^/]+\/([^/.]+)\.git/\1/')
 
 # Construct Actions URL
-ACTIONS_URL="https://github.com/$REPO_OWNER/$REPO_NAME/actions?query=branch%3D$NEW_TAG"
+ACTIONS_URL="https://github.com/$REPO_PATH/actions/workflows/ci.yml"
 echo "Monitor action status here: $ACTIONS_URL"
 
 echo "Release process initiated with tag $NEW_TAG. Check GitHub Actions for build status."
