@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -53,4 +53,4 @@ warn_unused_configs = true
 pythonpath = "src"
 
 [tool.hatch.version]
-path = "src/multisport_py/__init__.py"
+source = "vcs"
