@@ -5,7 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "multisport-py"
 dynamic = ["version"]
-description = "Python library for MultiSport API"
+description = "Python client library for interacting with the MultiSport platform."
+readme = "README.md"
 authors = [
     { name = "TheUndefined", email = "undefine@aramin.net" },
 ]
