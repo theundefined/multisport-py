@@ -86,7 +86,8 @@ git push origin "$NEW_TAG"
 # Get repository owner and name
 REPO_URL=$(git config --get remote.origin.url)
 REPO_OWNER=$(echo "$REPO_URL" | sed -E 's/.*github.com[:/]([^/]+)\/.*/\1/')
-REPO_NAME=$(echo "$REPO_URL" | sed -E 's/.*github.com[:/][^/]+\/([^/.]+)\.git/\1/')
+REPO_NAME=$(echo "$REPO_URL" | sed -E 's/.*github.com[:/][^/]+\/([^/.]+)(\.git)?/\1/')
+REPO_PATH="$REPO_OWNER/$REPO_NAME"
 
 # Construct Actions URL
 ACTIONS_URL="https://github.com/$REPO_PATH/actions/workflows/ci.yml"
