@@ -3,7 +3,7 @@ import hashlib
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Callable, Coroutine, Dict, List, Optional, cast
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -163,6 +163,67 @@ class MultisportClient:
 
         logger.info("Successfully obtained access and refresh tokens.")
 
+    async def _refresh_access_token(self) -> None:
+        """Refresh the access token using the refresh token."""
+        if not self.refresh_token:
+            raise AuthenticationError("No refresh token available.")
+
+        token_url = f"{self.AUTH_BASE_URL}protocol/openid-connect/token"
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": self.CLIENT_ID,
+            "refresh_token": self.refresh_token,
+        }
+
+        logger.info("Refreshing access token...")
+        try:
+            token_response = await self.http_client.post(
+                token_url,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            token_response.raise_for_status()
+            tokens = token_response.json()
+
+            self.access_token = tokens.get("access_token")
+            self.refresh_token = tokens.get("refresh_token")  # Refresh token might also be refreshed
+
+            if not self.access_token:
+                logger.error(f"Access token not found in refresh response: {tokens}")
+                raise AuthenticationError("Token refresh failed: Access token missing.")
+            logger.info("Access token refreshed successfully.")
+        except httpx.HTTPStatusError as exc:
+            logger.error(f"Token refresh failed with status {exc.response.status_code}: {exc.response.text}")
+            raise AuthenticationError("Token refresh failed.") from exc
+        except httpx.RequestError as exc:
+            raise MultisportError(f"Network error during token refresh: {exc}") from exc
+
+    async def _request_with_retry(
+        self, method: Callable[..., Coroutine[Any, Any, httpx.Response]], url: str, **kwargs: Any
+    ) -> httpx.Response:
+        """
+        Perform an HTTP request.
+
+        Retries with token refresh if a 401 Unauthorized status is received.
+        """
+        try:
+            response = await method(url, **kwargs)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                logger.warning("Access token expired (401 Unauthorized). Attempting to refresh token.")
+                await self._refresh_access_token()
+                logger.info("Retrying request with new access token.")
+                # Update Authorization header for the retry
+                if "headers" not in kwargs:
+                    kwargs["headers"] = {}
+                kwargs["headers"]["Authorization"] = f"Bearer {self.access_token}"
+                response = await method(url, **kwargs)
+                response.raise_for_status()
+                return response
+            raise  # Re-raise if not a 401 or if refresh failed
+
     async def login(self):
         """Perform the full login process."""
         logger.info("Starting MultiSport login process...")
@@ -182,8 +243,9 @@ class MultisportClient:
             raise ValueError("Not logged in. Call client.login() first.")
 
         headers = {"Authorization": f"Bearer {self.access_token}"}
-        response = await self.http_client.get(f"{self.AUTH_BASE_URL}protocol/openid-connect/userinfo", headers=headers)
-        response.raise_for_status()
+        response = await self._request_with_retry(
+            self.http_client.get, f"{self.AUTH_BASE_URL}protocol/openid-connect/userinfo", headers=headers
+        )
         return cast(Dict[str, Any], response.json())
 
     async def get_authorized_users(self) -> Dict[str, Any]:
@@ -195,7 +257,9 @@ class MultisportClient:
             "Authorization": f"Bearer {self.access_token}",
             "Accept-Language": "pl",
         }  # Added Accept-Language from curl
-        response = await self.http_client.get(f"{self.API_BASE_URL}bam/core/v1/authorized/users", headers=headers)
+        response = await self._request_with_retry(
+            self.http_client.get, f"{self.API_BASE_URL}bam/core/v1/authorized/users", headers=headers
+        )
         response.raise_for_status()
         return cast(Dict[str, Any], response.json())
 
@@ -208,7 +272,8 @@ class MultisportClient:
             "Authorization": f"Bearer {self.access_token}",
             "Accept-Language": "pl",
         }
-        response = await self.http_client.get(
+        response = await self._request_with_retry(
+            self.http_client.get,
             f"{self.API_BASE_URL}bam/core/v1/authorized/products/{product_id}/limits",
             headers=headers,
         )
@@ -240,7 +305,8 @@ class MultisportClient:
         if date_to:
             params["dateTo"] = date_to
 
-        response = await self.http_client.get(
+        response = await self._request_with_retry(
+            self.http_client.get,
             f"{self.API_BASE_URL}bam/core/v1/authorized/products/{product_id}/history",
             headers=headers,
             params=params,
@@ -257,8 +323,8 @@ class MultisportClient:
             "Authorization": f"Bearer {self.access_token}",
             "Accept-Language": "pl",
         }
-        response = await self.http_client.get(
-            f"{self.API_BASE_URL}bam/relations/v1/authorized/relations", headers=headers
+        response = await self._request_with_retry(
+            self.http_client.get, f"{self.API_BASE_URL}bam/relations/v1/authorized/relations", headers=headers
         )
         response.raise_for_status()
         return cast(Dict[str, Any], response.json())
