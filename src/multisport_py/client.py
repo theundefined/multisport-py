@@ -205,16 +205,29 @@ class MultisportClient:
         Perform an HTTP request.
 
         Retries with token refresh if a 401 Unauthorized status is received.
+        If token refresh fails, it will attempt a full re-login.
         """
         try:
             response = await method(url, **kwargs)
+            if response.status_code == 401:
+                # The token might have been valid when sent, but expired before the check.
+                # Force the refresh flow.
+                raise httpx.HTTPStatusError(
+                    "Simulating 401 for expired token", request=response.request, response=response
+                )
             response.raise_for_status()
             return response
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
-                logger.warning("Access token expired (401 Unauthorized). Attempting to refresh token.")
-                await self._refresh_access_token()
-                logger.info("Retrying request with new access token.")
+                logger.warning("Access token expired (401 Unauthorized). Attempting to refresh or re-login.")
+                try:
+                    await self._refresh_access_token()
+                    logger.info("Token refreshed successfully. Retrying request.")
+                except AuthenticationError:
+                    logger.warning("Token refresh failed. Attempting full re-login.")
+                    await self.login()
+                    logger.info("Re-login successful. Retrying request.")
+
                 # Update Authorization header for the retry
                 if "headers" not in kwargs:
                     kwargs["headers"] = {}
@@ -222,7 +235,7 @@ class MultisportClient:
                 response = await method(url, **kwargs)
                 response.raise_for_status()
                 return response
-            raise  # Re-raise if not a 401 or if refresh failed
+            raise  # Re-raise if not a 401
 
     async def login(self):
         """Perform the full login process."""
