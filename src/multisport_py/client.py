@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import logging
@@ -64,70 +65,81 @@ class MultisportClient:
             "code_challenge_method=S256"
         )
 
-        # Follow redirects to get to the actual login form URL
-        login_page_response = await self.http_client.get(login_init_url, follow_redirects=True)
-        login_page_response.raise_for_status()
+        for attempt in range(3):
+            try:
+                # Follow redirects to get to the actual login form URL
+                login_page_response = await self.http_client.get(login_init_url, follow_redirects=True)
+                login_page_response.raise_for_status()
 
-        login_form_html = login_page_response.text
+                login_form_html = login_page_response.text
 
-        # Search for the form action URL in the HTML content
-        match = re.search(r'action="([^"]*login-actions/authenticate[^"]*)"', login_form_html)
-        if not match:
-            logger.error("Could not find login action URL in the HTML response.")
-            raise AuthenticationError("Could not find login form action URL.")
+                # Search for the form action URL in the HTML content
+                match = re.search(r'action="([^"]*login-actions/authenticate[^"]*)"', login_form_html)
+                if not match:
+                    logger.warning("Could not find login action URL in the HTML response. Attempt %d/3", attempt + 1)
+                    await asyncio.sleep(2)  # Wait for 2 seconds before retrying
+                    continue
 
-        login_action_url = match.group(1).replace("&amp;", "&")
-        logger.info(f"Extracted login action URL: {login_action_url}")
+                login_action_url = match.group(1).replace("&amp;", "&")
+                logger.info(f"Extracted login action URL: {login_action_url}")
 
-        final_login_url = str(login_page_response.url)
-        logger.info(f"Reached final login page URL: {final_login_url}")
+                final_login_url = str(login_page_response.url)
+                logger.info(f"Reached final login page URL: {final_login_url}")
 
-        data = {
-            "username": self.username,
-            "password": self.password,
-            "credentialId": "",
-        }
+                data = {
+                    "username": self.username,
+                    "password": self.password,
+                    "credentialId": "",
+                }
 
-        logger.info("Performing login POST request with credentials...")
-        login_response = await self.http_client.post(
-            login_action_url,
-            data=data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": final_login_url,
-                "Origin": urlparse(final_login_url).scheme + "://" + urlparse(final_login_url).netloc,
-            },
-        )
+                logger.info("Performing login POST request with credentials...")
+                login_response = await self.http_client.post(
+                    login_action_url,
+                    data=data,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Referer": final_login_url,
+                        "Origin": urlparse(final_login_url).scheme + "://" + urlparse(final_login_url).netloc,
+                    },
+                )
 
-        # A 302 status is expected on successful login, as it redirects to the next step.
-        if login_response.status_code != 302:
-            logger.error(
-                "Login POST failed. Expected status 302, got "
-                f"{login_response.status_code}. Response: {login_response.text[:200]}"
-            )
-            raise AuthenticationError(f"Authentication failed: Unexpected status code {login_response.status_code}.")
+                # A 302 status is expected on successful login, as it redirects to the next step.
+                if login_response.status_code != 302:
+                    logger.error(
+                        "Login POST failed. Expected status 302, got "
+                        f"{login_response.status_code}. Response: {login_response.text[:200]}"
+                    )
+                    raise AuthenticationError(
+                        f"Authentication failed: Unexpected status code {login_response.status_code}."
+                    )
 
-        redirect_location = login_response.headers.get("Location")
-        if not redirect_location:
-            logger.error(
-                "No redirect location found after login POST. "
-                f"Response status: {login_response.status_code}, "
-                f"text: {login_response.text[:200]}"
-            )
-            raise AuthenticationError("Authentication failed: No redirect after login POST.")
+                redirect_location = login_response.headers.get("Location")
+                if not redirect_location:
+                    logger.error(
+                        "No redirect location found after login POST. "
+                        f"Response status: {login_response.status_code}, "
+                        f"text: {login_response.text[:200]}"
+                    )
+                    raise AuthenticationError("Authentication failed: No redirect after login POST.")
 
-        logger.info(f"Redirect location after login: {redirect_location}")
+                logger.info(f"Redirect location after login: {redirect_location}")
 
-        parsed_redirect = urlparse(redirect_location)
-        if parsed_redirect.fragment:
-            fragment_params = parse_qs(parsed_redirect.fragment)
-            auth_code = fragment_params.get("code", [""])[0]
-            if auth_code:
-                logger.info(f"Successfully obtained authorization code (truncated): {auth_code[:8]}...")
-                return cast(str, auth_code)
+                parsed_redirect = urlparse(redirect_location)
+                if parsed_redirect.fragment:
+                    fragment_params = parse_qs(parsed_redirect.fragment)
+                    auth_code = fragment_params.get("code", [""])[0]
+                    if auth_code:
+                        logger.info(f"Successfully obtained authorization code (truncated): {auth_code[:8]}...")
+                        return cast(str, auth_code)
 
-        logger.error("Failed to extract authorization code from redirect fragment: " f"{redirect_location}")
-        raise AuthenticationError("Authentication failed: Could not obtain authorization code.")
+                logger.warning("Could not extract authorization code. Attempt %d/3", attempt + 1)
+                await asyncio.sleep(2)  # Wait for 2 seconds before retrying
+
+            except httpx.RequestError as exc:
+                logger.warning("Request failed during authentication step 1. Attempt %d/3. Error: %s", attempt + 1, exc)
+                await asyncio.sleep(2)  # Wait for 2 seconds before retrying
+
+        raise AuthenticationError("Authentication failed after multiple retries.")
 
     async def _exchange_code_for_tokens(self, auth_code: str) -> None:
         """Exchanges the authorization code for access and refresh tokens."""
